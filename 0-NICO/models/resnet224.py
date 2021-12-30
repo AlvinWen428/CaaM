@@ -3,6 +3,8 @@ import math
 import torch
 import torch.nn as nn
 import torchvision.models
+import torchvision.transforms as T
+
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
@@ -231,6 +233,106 @@ class ResNet_Classifier(nn.Module):
         return x
 
 
+class FusionModule(nn.Module):
+    def __init__(self, net, if_fusion=False):
+        super(FusionModule, self).__init__()
+        self.net = net
+        self._if_fusion = if_fusion
+
+    def set_if_fusion(self, fusion):
+        self._if_fusion = fusion
+
+    def forward(self, x, condition):
+        if self._if_fusion:
+            condition_map = condition.view((*condition.shape, 1, 1))
+            condition_map = condition_map.expand((*condition.shape, *x.shape[-2:]))
+            input_tensor = torch.cat((x, condition_map), dim=1)
+            return self.net(input_tensor)
+        else:
+            return self.net(x)
+
+
+class ResNetFusionModel(ResNet):
+    def __init__(self, block, layers, fusion_layer, additional_channel, num_classes=1000):
+        super(ResNetFusionModel, self).__init__(block, layers, num_classes)
+        self.fusion_layer = fusion_layer
+        assert self.fusion_layer in [1, 2, 3, 4]
+        self.additional_channel = additional_channel
+
+        self.layer1 = FusionModule(self.layer1)
+        self.layer2 = FusionModule(self.layer2)
+        self.layer3 = FusionModule(self.layer3)
+        self.layer4 = FusionModule(self.layer4)
+        self._modify_in_channel(getattr(self, 'layer{}'.format(self.fusion_layer)), block)
+
+    def _modify_in_channel(self, layer: FusionModule, block):
+        # conv1
+        in_channels, out_channels, stride = layer.net[0].conv1.in_channels, layer.net[0].conv1.out_channels, \
+                                            layer.net[0].conv1.stride
+        del layer.net[0].conv1
+        if block == BasicBlock:
+            layer.net[0].conv1 = conv3x3(in_channels + self.additional_channel, out_channels, stride)
+        else:
+            layer.net[0].conv1 = nn.Conv2d(in_channels + self.additional_channel, out_channels, kernel_size=1, bias=False)
+
+        # downsample
+        if layer.net[0].downsample is not None:
+            in_channels = layer.net[0].downsample[0].in_channels
+            out_channels = layer.net[0].downsample[0].out_channels
+            stride = layer.net[0].downsample[0].stride
+            del layer.net[0].downsample
+            layer.net[0].downsample = nn.Sequential(
+                nn.Conv2d(in_channels + self.additional_channel, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels),
+            )
+        # set this layer as a fusion layer
+        layer.set_if_fusion(fusion=True)
+
+    def forward(self, x, condition):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x, condition)
+        x = self.layer2(x, condition)
+        x = self.layer3(x, condition)
+        x = self.layer4(x, condition)
+
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+
+        return x
+
+
+class TwoBranchResNet(nn.Module):
+    def __init__(self, block, layers, fusion_layer, stop_gradient=True, num_classes=1000):
+        super(TwoBranchResNet, self).__init__()
+        self.coarse_model = ResNet(block, layers, num_classes)
+        self.refine_model = ResNetFusionModel(block, layers, fusion_layer, num_classes, num_classes)
+        self.stop_gradient = stop_gradient
+
+        self.transform = nn.Sequential(
+            T.CenterCrop(150),
+            T.Pad((224-150)//2)
+        )
+
+    def forward(self, x, train_mode=False):
+        cropped_x = self.transform(x.clone())
+        coarse_output = self.coarse_model(cropped_x)
+        if self.stop_gradient:
+            input_condition = coarse_output.detach()
+        else:
+            input_condition = coarse_output
+
+        output = self.refine_model(x, input_condition)
+        if train_mode:
+            return output, coarse_output
+        else:
+            return output
+
+
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
     Args:
@@ -257,6 +359,14 @@ def resnet18_feature(pretrained=False, **kwargs):
     if pretrained:
         model.load_state_dict(torch.load(os.path.join(models_dir, model_name['resnet18'])))
     return model
+
+
+def crop_conditioned_resnet18(pretrained=False, fusion_layer=4, **kwargs):
+    model = TwoBranchResNet(BasicBlock, [2, 2, 2, 2], fusion_layer=fusion_layer, **kwargs)
+    if pretrained:
+        raise ValueError
+    return model
+
 
 def resnet34(pretrained=False, **kwargs):
     """Constructs a ResNet-34 model.

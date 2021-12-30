@@ -73,17 +73,22 @@ def train(epoch):
             images, targets_a, targets_b = map(Variable, (inputs, targets_a, targets_b))
 
         optimizer.zero_grad()
-        outputs = net(images)
+        if 'crop_conditioned' in args.net:
+            outputs = net(images, train_mode=True)
+            main_outputs = outputs[0]
+        else:
+            outputs = net(images)
+            main_outputs = outputs
 
         if 'mixup' in training_opt and training_opt['mixup'] == True:
-            loss = mixup_criterion(loss_function, outputs, targets_a, targets_b, lam)
+            loss = mixup_criterion(train_loss_function, outputs, targets_a, targets_b, lam)
         else:
-            loss = loss_function(outputs, labels)
+            loss = train_loss_function(outputs, labels)
 
         loss.backward()
         optimizer.step()
 
-        batch_correct, train_acc = cal_acc(outputs, labels)
+        batch_correct, train_acc = cal_acc(main_outputs, labels)
         train_correct += batch_correct
 
         num_updates += 1
@@ -231,11 +236,19 @@ if __name__ == '__main__':
         shuffle=False
     )
 
-    loss_function = nn.CrossEntropyLoss()
+    if 'crop_conditioned' not in args.net:
+        train_loss_function = test_loss_function = nn.CrossEntropyLoss()
+    else:
+        def two_ce_loss(output, target):
+            assert isinstance(output, tuple)
+            assert len(output) == 2
+            return F.cross_entropy(output[0], target) + F.cross_entropy(output[1], target)
+        train_loss_function = two_ce_loss
+        test_loss_function = nn.CrossEntropyLoss()
 
     if args.eval is not None:
-        val_acc = eval_mode(config, args, net, val_loader, loss_function, args.eval)
-        test_acc = eval_mode(config, args, net, test_loader, loss_function, args.eval)
+        val_acc = eval_mode(config, args, net, val_loader, test_loss_function, args.eval)
+        test_acc = eval_mode(config, args, net, test_loader, test_loss_function, args.eval)
         print('Val Score: %s  Test Score: %s' %(val_acc.item(), test_acc.item()))
         exit()
 
@@ -380,12 +393,12 @@ if __name__ == '__main__':
 
 
         if 'env' in variance_opt:
-            train_acc = train_env_ours(epoch, net, train_loader, args, training_opt, variance_opt, loss_function, optimizer, warmup_scheduler)
+            train_acc = train_env_ours(epoch, net, train_loader, args, training_opt, variance_opt, train_loss_function, optimizer, warmup_scheduler)
 
         else:
             train_acc = train(epoch)
 
-        acc = eval_training(config, args, net, val_loader, loss_function, writer, epoch)
+        acc = eval_training(config, args, net, val_loader, test_loss_function, writer, epoch)
 
         if best_acc < acc:
             # torch.save(net.state_dict(), checkpoint_path.format(net=args.net, epoch=epoch, type='best'))
@@ -402,7 +415,7 @@ if __name__ == '__main__':
         print("Best Acc: %.4f \t Train Acc: %.4f \t Best Epoch: %d" %(best_acc, best_train_acc, best_epoch))
 
     print('Evaluate Best Epoch %d ...' %(best_epoch))
-    acc_final = eval_best(config, args, net, test_loader, loss_function ,checkpoint_path, best_epoch)
+    acc_final = eval_best(config, args, net, test_loader, test_loss_function, checkpoint_path, best_epoch)
     txt_write = open("results_txt/" + exp_name + '.txt', 'w')
     txt_write.write(str(best_train_acc.cpu().item()))
     txt_write.write(str(best_acc.cpu().item()))
