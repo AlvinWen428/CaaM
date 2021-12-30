@@ -115,16 +115,20 @@ def eval_best(config, args, net, test_loader, loss_function ,checkpoint_path, be
         correct.float() / len(test_loader.dataset),
         finish - start
     ))
+    evaluate_acc_per_context_per_class(config, acc_per_context, label2train)
+
+    return correct.float() / len(test_loader.dataset)
+
+
+def evaluate_acc_per_context_per_class(config, acc_per_context, label2train):
     print('Evaluate Acc Per Context Per Class...')
     class_dic = json.load(open(config['class_dic_path'], 'r'))
     class_dic = {v: k for k, v in class_dic.items()}
     acc_cxt_all_class = acc_per_context.cal_acc()
     for label_class in acc_cxt_all_class.keys():
         acc_class = acc_cxt_all_class[label_class]
-        print('Class: %s' %(class_dic[int(label2train[label_class])]))
+        print('Class: %s' % (class_dic[int(label2train[label_class])]))
         print(tabulate.tabulate(acc_class, headers=['Context', 'Acc'], tablefmt='grid'))
-
-    return correct.float() / len(test_loader.dataset)
 
 
 @torch.no_grad()
@@ -174,5 +178,7 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path):
         correct.float() / len(test_loader.dataset),
         finish - start
     ))
+
+    evaluate_acc_per_context_per_class(config, acc_per_context, label2train)
 
     return correct.float() / len(test_loader.dataset)
