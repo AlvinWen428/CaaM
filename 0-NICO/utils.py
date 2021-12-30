@@ -14,6 +14,9 @@ from torch.utils.data import DataLoader, Dataset
 from torch import nn, optim, autograd
 from PIL import Image
 
+import matplotlib.pyplot as plt
+plt.rcParams["savefig.bbox"] = 'tight'
+
 
 def get_network(args):
     """ return given network
@@ -61,6 +64,9 @@ def get_network(args):
     elif args.net == 'resnet18':
         from models.resnet224 import resnet18
         net = resnet18(num_classes=10)
+    elif args.net == 'crop_conditioned_resnet18':
+        from models.resnet224 import crop_conditioned_resnet18
+        net = crop_conditioned_resnet18(num_classes=10)
     elif args.net == 'resnet34':
         from models.resnet224 import resnet34
         net = resnet34(num_classes=10)
@@ -266,9 +272,8 @@ def get_mean_std(image_folder):
     return list(mean.numpy()), list(std.numpy())
 
 
-def reformulate_data_dist(datas, labels, contexts, config):
-    balance_factor = config['variance_opt']['balance_factor']
-    training_dist = config['variance_opt']['training_dist']
+def reformulate_data_dist(datas, labels, contexts, balance_factor, dataset_type, config):
+    data_dist = config['variance_opt']['{}_dist'.format(dataset_type)]
     cxt_dic = json.load(open(config['cxt_dic_path'], 'r'))
     class_dic = json.load(open(config['class_dic_path'], 'r'))
 
@@ -276,18 +281,21 @@ def reformulate_data_dist(datas, labels, contexts, config):
     new_label = []
     new_context = []
 
-    for img_class in training_dist.keys():
-        cls_num = len(training_dist[img_class])
+    for img_class in data_dist.keys():
+        cls_num = len(data_dist[img_class])
         class_idx = np.where(np.array(labels) == str(class_dic[img_class]))[0]
         img_class_labels = [labels[idx] for idx in class_idx]
         img_class_datas = [datas[idx] for idx in class_idx]
         img_class_contexts = [contexts[idx] for idx in class_idx]
 
-        for index, img_context in enumerate(training_dist[img_class]):
+        for index, img_context in enumerate(data_dist[img_class]):
             img_context_label = cxt_dic[img_context]
             idx = np.where(np.array(img_class_contexts) == str(img_context_label))[0]
             img_context_num = idx.shape[0]
-            select_context_num = int(img_context_num * (balance_factor**(index / (cls_num - 1.0))))
+            if cls_num > 1:
+                select_context_num = int(img_context_num * (balance_factor**(index / (cls_num - 1.0))))
+            else:
+                select_context_num = int(img_context_num)
             np.random.shuffle(idx)
 
             selec_idx = idx[:select_context_num]
@@ -346,7 +354,7 @@ def make_env(image, label, context, n_env, env_type, pre_split=None):
     return image_env, label_env, context_env
 
 
-def load_NICO(dataroot, balance_factor=1, config=None):
+def load_NICO(dataroot, balance_factor=1, dataset_type='training', config=None):
     all_file_name = os.listdir(dataroot)
     all_data = []
     all_label = []
@@ -361,10 +369,20 @@ def load_NICO(dataroot, balance_factor=1, config=None):
     label_set = list(set(all_label))
     label2train = {label_set[i]: i for i in range(len(label_set))}
 
-    if balance_factor != 1:
-        all_data, all_label, all_context = reformulate_data_dist(all_data,all_label,all_context,config)
+    if (balance_factor != 1) or ('{}_dist'.format(dataset_type) in config['variance_opt']):
+        all_data, all_label, all_context = reformulate_data_dist(all_data,all_label,all_context,balance_factor,dataset_type,config)
 
     return all_data, all_label, all_context
+
+
+def show(imgs):
+    fix, axs = plt.subplots(ncols=len(imgs), squeeze=False)
+    for i, img in enumerate(imgs):
+        if isinstance(img, torch.Tensor):
+            img = transforms.ToPILImage()(img.to('cpu')*torch.tensor([0.21851876, 0.2175944, 0.22552039]).view(-1,1,1)+torch.tensor([0.52418953, 0.5233741, 0.44896784]).view(-1,1,1))
+        axs[0, i].imshow(np.asarray(img))
+        axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
+    plt.show()
 
 
 class NICO_dataset(torch.utils.data.Dataset):
@@ -390,8 +408,9 @@ class NICO_dataset(torch.utils.data.Dataset):
 
 
     def __getitem__(self, item):
-        img = self.all_data[item]
-        img = self.transform(img)
+        raw_img = self.all_data[item]
+        img = self.transform(raw_img)
+        # show([raw_img, img])
 
         label = self.label2train[self.all_label[item]]
         context = self.all_context[item]
@@ -455,14 +474,16 @@ class init_training_dataloader():
 
         elif config['dataset'] == "NICO":
             self.transform = transforms.Compose([
-                transforms.Resize(224),
-                transforms.RandomCrop(224, padding=16),
+                transforms.Resize((224, 224)),
+                # transforms.Resize(224),
+                # transforms.RandomCrop(224, padding=16),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomRotation(15),
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std)
             ])
-            self.image, self.label, self.context = load_NICO(os.path.join(config['image_folder'], 'train'), balance_factor, config)
+            self.image, self.label, self.context = load_NICO(os.path.join(config['image_folder'], 'train'),
+                                                             balance_factor, 'training', config)
 
     def get_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
         training_dataset = NICO_dataset(self.image, self.label, self.context, transform=self.transform)
@@ -533,7 +554,8 @@ def get_test_dataloader(config, mean, std, batch_size=16, num_workers=2, shuffle
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])
-        image, label, context = load_NICO(os.path.join(config['image_folder'], 'test'), config=config)
+        image, label, context = load_NICO(os.path.join(config['image_folder'], 'test'), balance_factor=1,
+                                          dataset_type='test', config=config)
         testing_dataset = NICO_dataset(image, label, context, transform_test, require_context=True)
 
     testing_loader = DataLoader(
@@ -568,7 +590,8 @@ def get_val_dataloader(config, mean, std, batch_size=16, num_workers=2, shuffle=
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])
-        image, label, context = load_NICO(os.path.join(config['image_folder'], 'val'), config=config)
+        image, label, context = load_NICO(os.path.join(config['image_folder'], 'val'), balance_factor=1,
+                                          dataset_type='val', config=config)
         val_dataset = NICO_dataset(image, label, context, transform_test, require_context=True)
 
     val_loader = DataLoader(val_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
