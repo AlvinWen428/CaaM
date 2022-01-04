@@ -400,6 +400,21 @@ def show(imgs):
     plt.show()
 
 
+def save_img(imgs, img_name):
+    fix, axs = plt.subplots(ncols=len(imgs), squeeze=False)
+    for i, img in enumerate(imgs):
+        if isinstance(img, torch.Tensor):
+            img = transforms.ToPILImage()(
+                img.to('cpu') * torch.tensor([0.21851876, 0.2175944, 0.22552039]).view(-1, 1, 1) + torch.tensor(
+                    [0.52418953, 0.5233741, 0.44896784]).view(-1, 1, 1))
+        axs[0, i].imshow(np.asarray(img))
+        axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
+
+    save_dir = 'test_crop_image/crop150/'
+    os.makedirs(save_dir, exist_ok=True)
+    plt.savefig(save_dir+img_name)
+
+
 class NICO_dataset(torch.utils.data.Dataset):
     def __init__(self, all_data, all_label, all_context, transform=None, require_context=False, soft_split=None, label2train=None):
         super(NICO_dataset, self).__init__()
@@ -420,12 +435,17 @@ class NICO_dataset(torch.utils.data.Dataset):
             self.soft_split = soft_split
         else:
             self.soft_split = None
-
+        # self.crop_transform = nn.Sequential(
+        #     transforms.CenterCrop(150),
+        #     transforms.Pad((224-150)//2)
+        # )
 
     def __getitem__(self, item):
         raw_img = self.all_data[item]
         img = self.transform(raw_img)
         # show([raw_img, img])
+        # crop_img = self.crop_transform(img)
+        # save_img([img, crop_img], '{}.png'.format(item))
 
         label = self.label2train[self.all_label[item]]
         context = self.all_context[item]
