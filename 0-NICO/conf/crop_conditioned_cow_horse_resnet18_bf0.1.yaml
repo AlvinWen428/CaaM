@@ -23,10 +23,13 @@ variance_opt:
   balance_factor: 0.1
   training_dist: { 'cow': [ 'on_grass', 'on_snow' ],
                    'horse': [ 'on_snow', 'on_grass' ] }
-  val_dist: { 'cow': [ 'on_grass', 'on_snow' ],
-              'horse': [ 'on_snow', 'on_grass' ] }
-  test_dist: { 'cow': [ 'on_grass', 'on_snow' ],
-               'horse': [ 'on_grass', 'on_snow' ] }
-  mode: 'baseline'
+  val_dist: { 'cow': ['in_river', 'lying', 'standing','eating','in_forest','on_grass','on_snow'],
+              'horse': ['on_beach', 'aside_people', 'running','lying','on_grass','on_snow','in_forest'] }
+  test_dist: { 'cow': ['in_river', 'lying', 'standing','eating','in_forest','on_grass','on_snow'],
+               'horse': ['on_beach', 'aside_people', 'running','lying','on_grass','on_snow','in_forest'] }
+  fusion_layer: 4
+  crop_size: 150
+  stop_gradient: True
+  mode: 'chuan'
   env_type: 'baseline'
 resume: False

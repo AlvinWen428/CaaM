@@ -31,6 +31,9 @@ variance_opt:
                   'monkey': ['sitting', 'walking', 'in_water','on_snow','in_forest','eating','on_grass'],
                   'rat': ['at_home', 'in_hole', 'in_cage','in_forest','in_water','on_grass','eating'],
                   'sheep': ['eating', 'on_road','walking','on_snow','on_grass','lying','in_forest']}
-  mode: 'baseline'
+  fusion_layer: 4
+  crop_size: 150
+  stop_gradient: True
+  mode: 'chuan'
   env_type: 'baseline'
 resume: False
