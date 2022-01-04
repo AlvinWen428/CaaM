@@ -64,9 +64,6 @@ def get_network(args):
     elif args.net == 'resnet18':
         from models.resnet224 import resnet18
         net = resnet18(num_classes=10)
-    elif args.net == 'crop_conditioned_resnet18':
-        from models.resnet224 import crop_conditioned_resnet18
-        net = crop_conditioned_resnet18(num_classes=10)
     elif args.net == 'resnet34':
         from models.resnet224 import resnet34
         net = resnet34(num_classes=10)
@@ -241,6 +238,24 @@ def get_custom_network_vit(args, variance_opt):
         model_list = [model_list_.cuda() for model_list_ in model_list]
 
     return model_list
+
+
+def get_custom_network_crop_conditioned(args, variance_opt: dict):
+    if args.net == 'crop_conditioned_resnet18':
+        fusion_layer = variance_opt.get('fusion_layer', 4)
+        stop_gradient = variance_opt.get('stop_gradient', True)
+        crop_size = variance_opt.get('crop_size', 150)
+
+        from models.crop_conditioned_model import crop_conditioned_resnet18
+        net = crop_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer, stop_gradient=stop_gradient,
+                                        crop_size=crop_size)
+    else:
+        raise ValueError
+
+    if args.gpu:
+        net = net.cuda()
+    return net
+
 
 def update(config, args):
     # Change parameters

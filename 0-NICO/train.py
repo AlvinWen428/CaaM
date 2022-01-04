@@ -23,7 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 from conf import settings
 from utils import get_network, get_test_dataloader, get_val_dataloader, WarmUpLR, most_recent_folder, most_recent_weights, last_epoch, best_acc_weights, \
     update, get_mean_std, Acc_Per_Context, Acc_Per_Context_Class, penalty, cal_acc, get_custom_network, get_custom_network_vit, \
-    save_model, load_model, get_parameter_number, init_training_dataloader
+    save_model, load_model, get_parameter_number, init_training_dataloader, get_custom_network_crop_conditioned
 from train_module import train_env_ours, auto_split, refine_split, update_pre_optimizer, update_pre_optimizer_vit, update_bias_optimizer, auto_cluster
 from eval_module import eval_training, eval_best, eval_mode
 from timm.scheduler import create_scheduler
@@ -155,6 +155,8 @@ if __name__ == '__main__':
             net = get_custom_network_vit(args, variance_opt)
         else:
             net = get_custom_network(args, variance_opt)
+    elif variance_opt['mode'] in ['chuan']:
+        net = get_custom_network_crop_conditioned(args, variance_opt)
     else:
         net = get_network(args)
     if 'env_type' in variance_opt and variance_opt['env_type'] in ['auto-baseline', 'auto-iter'] and variance_opt['from_scratch']:
@@ -417,8 +419,8 @@ if __name__ == '__main__':
     print('Evaluate Best Epoch %d ...' %(best_epoch))
     acc_final = eval_best(config, args, net, test_loader, test_loss_function, checkpoint_path, best_epoch)
     txt_write = open("results_txt/" + exp_name + '.txt', 'w')
-    txt_write.write(str(best_train_acc.cpu().item()))
-    txt_write.write(str(best_acc.cpu().item()))
-    txt_write.write(str(acc_final.cpu().item()))
+    txt_write.write(str(best_train_acc.cpu().item())+' ')
+    txt_write.write(str(best_acc.cpu().item())+' ')
+    txt_write.write(str(acc_final.cpu().item())+' ')
     txt_write.close
     writer.close()
