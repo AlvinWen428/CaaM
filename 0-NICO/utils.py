@@ -243,11 +243,13 @@ def get_custom_network_vit(args, variance_opt):
 def get_custom_network_crop_conditioned(args, variance_opt: dict):
     if args.net == 'crop_conditioned_resnet18':
         fusion_layer = variance_opt.get('fusion_layer', 4)
+        condition_activation = variance_opt.get('condition_activation', None)
         stop_gradient = variance_opt.get('stop_gradient', True)
         crop_size = variance_opt.get('crop_size', 150)
 
         from models.crop_conditioned_model import crop_conditioned_resnet18
-        net = crop_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer, stop_gradient=stop_gradient,
+        net = crop_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer,
+                                        condition_activation=condition_activation, stop_gradient=stop_gradient,
                                         crop_size=crop_size)
     else:
         raise ValueError

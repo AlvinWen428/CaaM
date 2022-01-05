@@ -2,6 +2,7 @@ import os
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.transforms as T
 
 from .resnet224 import ResNet, BasicBlock, Bottleneck, conv3x3
@@ -81,10 +82,12 @@ class ResNetFusionModel(ResNet):
 
 
 class TwoBranchResNet(nn.Module):
-    def __init__(self, block, layers, fusion_layer, crop_size, stop_gradient=True, num_classes=1000):
+    def __init__(self, block, layers, fusion_layer, crop_size, condition_activation=None,
+                 stop_gradient=True, num_classes=1000):
         super(TwoBranchResNet, self).__init__()
         self.coarse_model = ResNet(block, layers, num_classes)
         self.refine_model = ResNetFusionModel(block, layers, fusion_layer, num_classes, num_classes)
+        self.condition_activation = condition_activation
         self.stop_gradient = stop_gradient
         self.crop_size = crop_size
         assert self.crop_size % 2 == 0
@@ -94,6 +97,16 @@ class TwoBranchResNet(nn.Module):
             T.Pad((224-crop_size)//2)
         )
 
+    def activation_on_condition(self, condition):
+        if self.condition_activation == 'relu':
+            return F.relu(condition)
+        elif self.condition_activation == 'softmax':
+            return F.softmax(condition, dim=1)
+        elif self.condition_activation is None:
+            return condition
+        else:
+            raise ValueError
+
     def forward(self, x, train_mode=False):
         cropped_x = self.transform(x.clone())
         coarse_output = self.coarse_model(cropped_x)
@@ -101,6 +114,7 @@ class TwoBranchResNet(nn.Module):
             input_condition = coarse_output.detach()
         else:
             input_condition = coarse_output
+        input_condition = self.activation_on_condition(input_condition)
 
         output = self.refine_model(x, input_condition)
         if train_mode:
