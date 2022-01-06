@@ -27,18 +27,34 @@ class FusionModule(nn.Module):
             return self.net(x)
 
 
+class FusionFCModule(FusionModule):
+    def __init__(self, net, if_fusion=False):
+        super(FusionFCModule, self).__init__(net, if_fusion)
+
+    def forward(self, x, condition):
+        if self._if_fusion:
+            input_tensor = torch.cat((x, condition), dim=1)
+            return self.net(input_tensor)
+        else:
+            return self.net(x)
+
+
 class ResNetFusionModel(ResNet):
     def __init__(self, block, layers, fusion_layer, additional_channel, num_classes=1000):
         super(ResNetFusionModel, self).__init__(block, layers, num_classes)
         self.fusion_layer = fusion_layer
-        assert self.fusion_layer in [1, 2, 3, 4]
+        assert self.fusion_layer in [1, 2, 3, 4, 5]
         self.additional_channel = additional_channel
 
         self.layer1 = FusionModule(self.layer1)
         self.layer2 = FusionModule(self.layer2)
         self.layer3 = FusionModule(self.layer3)
         self.layer4 = FusionModule(self.layer4)
-        self._modify_in_channel(getattr(self, 'layer{}'.format(self.fusion_layer)), block)
+        if self.fusion_layer <= 4:
+            self._modify_in_channel(getattr(self, 'layer{}'.format(self.fusion_layer)), block)
+        else:
+            self.fc = FusionFCModule(self.fc)
+            self._modify_fc_layer(self.fc)
 
     def _modify_in_channel(self, layer: FusionModule, block):
         # conv1
@@ -63,6 +79,12 @@ class ResNetFusionModel(ResNet):
         # set this layer as a fusion layer
         layer.set_if_fusion(fusion=True)
 
+    def _modify_fc_layer(self, layer: FusionFCModule):
+        in_features, out_features = layer.net.in_features, layer.net.out_features
+        del layer.net
+        layer.net = nn.Linear(in_features + self.additional_channel, out_features)
+        layer.set_if_fusion(fusion=True)
+
     def forward(self, x, condition):
         x = self.conv1(x)
         x = self.bn1(x)
@@ -76,7 +98,10 @@ class ResNetFusionModel(ResNet):
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        if self.fusion_layer == 5:
+            x = self.fc(x, condition)
+        else:
+            x = self.fc(x)
 
         return x
 
