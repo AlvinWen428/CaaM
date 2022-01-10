@@ -233,6 +233,27 @@ class ResNet_Classifier(nn.Module):
         return x
 
 
+class TwoVanillaResNet(nn.Module):
+    def __init__(self, block, layers, num_classes=1000):
+        super(TwoVanillaResNet, self).__init__()
+        self.resnet1 = ResNet_Feature(block, layers)
+        self.resnet2 = ResNet_Feature(block, layers)
+        self.fc = nn.Linear(2 * 512 * block.expansion, num_classes)
+
+    def forward(self, x):
+        feature1 = self.resnet1(x)
+        feature2 = self.resnet2(x)
+        output = self.fc(torch.cat((feature1, feature2), dim=1))
+        return output
+
+
+def two_vanilla_resnet18(pretrained=False, **kwargs):
+    model = TwoVanillaResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        raise NotImplementedError
+    return model
+
+
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
     Args:
