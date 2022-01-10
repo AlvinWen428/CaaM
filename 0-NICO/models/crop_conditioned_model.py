@@ -147,8 +147,37 @@ class TwoBranchResNet(nn.Module):
         else:
             return output
 
+
+class UncropConditionedAblation(TwoBranchResNet):
+    def __init__(self, block, layers, fusion_layer, crop_size, condition_activation=None,
+                 stop_gradient=True, num_classes=1000):
+        super(UncropConditionedAblation, self).__init__(block, layers, fusion_layer, crop_size, condition_activation,
+                                                        stop_gradient, num_classes)
+
+    def forward(self, x, train_mode=False):
+        coarse_output = self.coarse_model(x)
+        if self.stop_gradient:
+            input_condition = coarse_output.detach()
+        else:
+            input_condition = coarse_output
+        input_condition = self.activation_on_condition(input_condition)
+
+        output = self.refine_model(x, input_condition)
+        if train_mode:
+            return output, coarse_output
+        else:
+            return output
+
+
 def crop_conditioned_resnet18(pretrained=False, fusion_layer=4, **kwargs):
     model = TwoBranchResNet(BasicBlock, [2, 2, 2, 2], fusion_layer=fusion_layer, **kwargs)
+    if pretrained:
+        raise ValueError
+    return model
+
+
+def uncrop_conditioned_resnet18(pretrained=False, fusion_layer=4, **kwargs):
+    model = UncropConditionedAblation(BasicBlock, [2, 2, 2, 2], fusion_layer=fusion_layer, **kwargs)
     if pretrained:
         raise ValueError
     return model
