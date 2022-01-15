@@ -1,5 +1,5 @@
 exp_name: nico_resvit18_multi_unshuffle_bf0.02_lr0.01
-net: crop_conditioned_resnet18
+net: uncrop_conditioned_resnet18
 dataset: NICO
 #image_folder: /data2/wangtan/causal-invariant-attention/dataset/NICO/multi_classification
 #cxt_dic_path: /data2/wangtan/causal-invariant-attention/dataset/NICO/label_file/Context_name2label.json
