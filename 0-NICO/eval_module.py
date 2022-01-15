@@ -21,10 +21,19 @@ def eval_training(config, args, net, test_loader, loss_function, writer, epoch=0
     correct = 0.0
     acc_per_context = Acc_Per_Context(config['cxt_dic_path'])
 
-    for (images, labels, context) in test_loader:
-
-        images = images.cuda()
-        labels = labels.cuda()
+    for batch_data in test_loader:
+        if len(batch_data) == 3:
+            images, labels, context = batch_data[0], batch_data[1], batch_data[2]
+            processed_images = None
+            images = images.cuda()
+            labels = labels.cuda()
+        elif len(batch_data) == 4:
+            images, labels, context, processed_images = batch_data[0], batch_data[1], batch_data[2], batch_data[3]
+            images = images.cuda()
+            labels = labels.cuda()
+            processed_images = processed_images.cuda()
+        else:
+            raise ValueError
 
         if isinstance(net, list):
             feature = net[-1](images)
@@ -36,7 +45,10 @@ def eval_training(config, args, net, test_loader, loss_function, writer, epoch=0
                 W_mean = torch.stack([net_.module.fc.weight for net_ in net[:config['variance_opt']['n_env']]], 0).mean(0)
             outputs = nn.functional.linear(feature, W_mean)
         else:
-            outputs = net(images)
+            if 'saliency_conditioned' in args.net:
+                outputs = net(images, processed_images)
+            else:
+                outputs = net(images)
         loss = loss_function(outputs, labels)
         test_loss += loss.item()
         _, preds = outputs.max(1)
@@ -84,11 +96,21 @@ def eval_best(config, args, net, test_loader, loss_function ,checkpoint_path, be
     label2train = {v: k for k, v in label2train.items()}
     acc_per_context = Acc_Per_Context_Class(config['cxt_dic_path'], list(label2train.keys()))
 
-    for (images, labels, context) in test_loader:
-
-        if args.gpu:
-            images = images.cuda()
-            labels = labels.cuda()
+    for batch_data in test_loader:
+        if len(batch_data) == 3:
+            images, labels, context = batch_data[0], batch_data[1], batch_data[2]
+            processed_images = None
+            if args.gpu:
+                images = images.cuda()
+                labels = labels.cuda()
+        elif len(batch_data) == 4:
+            images, labels, context, processed_images = batch_data[0], batch_data[1], batch_data[2], batch_data[3]
+            if args.gpu:
+                images = images.cuda()
+                labels = labels.cuda()
+                processed_images = processed_images.cuda()
+        else:
+            raise ValueError
 
         if isinstance(net, list):
             feature = net[-1](images)
@@ -100,7 +122,10 @@ def eval_best(config, args, net, test_loader, loss_function ,checkpoint_path, be
                 W_mean = torch.stack([net_.module.fc.weight for net_ in net[:config['variance_opt']['n_env']]], 0).mean(0)
             outputs = nn.functional.linear(feature, W_mean)
         else:
-            outputs = net(images)
+            if 'saliency_conditioned' in args.net:
+                outputs = net(images, processed_images)
+            else:
+                outputs = net(images)
         loss = loss_function(outputs, labels)
         test_loss += loss.item()
         _, preds = outputs.max(1)
@@ -147,11 +172,21 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path):
     label2train = {v: k for k, v in label2train.items()}
     acc_per_context = Acc_Per_Context_Class(config['cxt_dic_path'], list(label2train.keys()))
 
-    for (images, labels, context) in test_loader:
-
-        if args.gpu:
-            images = images.cuda()
-            labels = labels.cuda()
+    for batch_data in test_loader:
+        if len(batch_data) == 3:
+            images, labels, context = batch_data[0], batch_data[1], batch_data[2]
+            processed_images = None
+            if args.gpu:
+                images = images.cuda()
+                labels = labels.cuda()
+        elif len(batch_data) == 4:
+            images, labels, context, processed_images = batch_data[0], batch_data[1], batch_data[2], batch_data[3]
+            if args.gpu:
+                images = images.cuda()
+                labels = labels.cuda()
+                processed_images = processed_images.cuda()
+        else:
+            raise ValueError
 
         if isinstance(net, list):
             feature = net[-1](images)
@@ -163,7 +198,10 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path):
                 W_mean = torch.stack([net_.module.fc.weight for net_ in net[:config['variance_opt']['n_env']]], 0).mean(0)
             outputs = nn.functional.linear(feature, W_mean)
         else:
-            outputs = net(images)
+            if 'saliency_conditioned' in args.net:
+                outputs = net(images, processed_images)
+            else:
+                outputs = net(images)
         loss = loss_function(outputs, labels)
         test_loss += loss.item()
         _, preds = outputs.max(1)

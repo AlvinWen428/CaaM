@@ -23,7 +23,8 @@ from torch.utils.tensorboard import SummaryWriter
 from conf import settings
 from utils import get_network, get_test_dataloader, get_val_dataloader, WarmUpLR, most_recent_folder, most_recent_weights, last_epoch, best_acc_weights, \
     update, get_mean_std, Acc_Per_Context, Acc_Per_Context_Class, penalty, cal_acc, get_custom_network, get_custom_network_vit, \
-    save_model, load_model, get_parameter_number, init_training_dataloader, get_custom_network_crop_conditioned
+    save_model, load_model, get_parameter_number, init_training_dataloader, get_custom_network_crop_conditioned, \
+    get_custom_network_saliency
 from train_module import train_env_ours, auto_split, refine_split, update_pre_optimizer, update_pre_optimizer_vit, update_bias_optimizer, auto_cluster
 from eval_module import eval_training, eval_best, eval_mode
 from timm.scheduler import create_scheduler
@@ -57,7 +58,15 @@ def train(epoch):
     train_correct = 0.
     num_updates = epoch * len(train_loader)
 
-    for batch_index, (images, labels) in enumerate(train_loader):
+    for batch_index, batch_data in enumerate(train_loader):
+        if len(batch_data) == 2:
+            images, labels = batch_data[0], batch_data[1]
+            processed_images = None
+        elif len(batch_data) == 3:
+            images, labels, processed_images = batch_data[0], batch_data[1], batch_data[2]
+        else:
+            raise ValueError
+
         if 't2tvit' in args.net and training_opt['optim']['sched']=='cosine':
             lr_scheduler.step_update(num_updates=num_updates)
         else:
@@ -67,6 +76,8 @@ def train(epoch):
         if args.gpu:
             labels = labels.cuda()
             images = images.cuda()
+            if processed_images is not None:
+                processed_images = processed_images.cuda()
 
         if 'mixup' in training_opt and training_opt['mixup'] == True:
             inputs, targets_a, targets_b, lam = mixup_data(images, labels, use_cuda=True)
@@ -75,6 +86,9 @@ def train(epoch):
         optimizer.zero_grad()
         if 'crop_conditioned' in args.net:
             outputs = net(images, train_mode=True)
+            main_outputs = outputs[0]
+        elif 'saliency_conditioned' in args.net:
+            outputs = net(images, processed_images, train_mode=True)
             main_outputs = outputs[0]
         else:
             outputs = net(images)
@@ -157,6 +171,8 @@ if __name__ == '__main__':
             net = get_custom_network(args, variance_opt)
     elif variance_opt['mode'] in ['chuan']:
         net = get_custom_network_crop_conditioned(args, variance_opt)
+    elif variance_opt['mode'] in ['chuan_saliency']:
+        net = get_custom_network_saliency(args, variance_opt)
     else:
         net = get_network(args)
     if 'env_type' in variance_opt and variance_opt['env_type'] in ['auto-baseline', 'auto-iter'] and variance_opt['from_scratch']:
@@ -216,8 +232,10 @@ if __name__ == '__main__':
     if 'env' in variance_opt:
         train_loader = train_loader_init.get_env_dataloader(config, training_opt['batch_size'], num_workers=4, shuffle=True, pre_split=pre_split)
     else:
-        train_loader = train_loader_init.get_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
-
+        if variance_opt['mode'] not in ['chuan_saliency']:
+            train_loader = train_loader_init.get_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
+        else:
+            train_loader = train_loader_init.get_processed_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
 
     val_loader = get_val_dataloader(
         config,
@@ -238,7 +256,7 @@ if __name__ == '__main__':
         shuffle=False
     )
 
-    if 'crop_conditioned' not in args.net:
+    if variance_opt['mode'] not in ['chuan', 'chuan_saliency']:
         train_loss_function = test_loss_function = nn.CrossEntropyLoss()
     else:
         def two_ce_loss(output, target):
