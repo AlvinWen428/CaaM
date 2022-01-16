@@ -156,6 +156,27 @@ def evaluate_acc_per_context_per_class(config, acc_per_context, label2train):
         print(tabulate.tabulate(acc_class, headers=['Context', 'Acc'], tablefmt='grid'))
 
 
+def evaluate_zero_shot_generalization(config, acc_per_context, label2train):
+    class_dic = json.load(open(config['class_dic_path'], 'r'))
+    class_dic = {v: k for k, v in class_dic.items()}
+    acc_cxt_all_class = acc_per_context.cal_acc()
+
+    num_zero_shot_correct = 0
+    num_zero_shot_samples = 0
+    for label_class in acc_cxt_all_class.keys():
+        acc_class = acc_cxt_all_class[label_class]
+        for (ctx, acc) in acc_class:
+            zero_shot_ctx_list = []
+            if ctx not in config['variance_opt']['training_dist'][class_dic[int(label2train[label_class])]]:
+                zero_shot_ctx_list.append(ctx)
+            correct_info = acc_per_context.count_correct_info_in_some_contexts_of_a_label(label_class, zero_shot_ctx_list)
+            num_zero_shot_correct += correct_info['num_correct']
+            num_zero_shot_samples += correct_info['num_all_samples']
+
+    zero_shot_acc = num_zero_shot_correct / num_zero_shot_samples
+    print('The zero shot generalization accuracy is {}'.format(zero_shot_acc))
+
+
 @torch.no_grad()
 def eval_mode(config, args, net, test_loader, loss_function, model_path):
     start = time.time()
@@ -218,5 +239,6 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path):
     ))
 
     evaluate_acc_per_context_per_class(config, acc_per_context, label2train)
+    evaluate_zero_shot_generalization(config, acc_per_context, label2train)
 
     return correct.float() / len(test_loader.dataset)

@@ -843,6 +843,21 @@ class Acc_Per_Context_Class():
             acc_all[label] = acc_class
         return acc_all
 
+    def count_correct_info_in_some_contexts_of_a_label(self, label, context_list):
+        all_correct = 0
+        all_samples = 0
+        for cxt in context_list:
+            assert self.cxt_dic[cxt] in self.correct_cnt[label]['cnt'], \
+                'The context {} cannot be found in class {}!'.format(cxt, label)
+            if self.correct_cnt[label]['cnt'][self.cxt_dic[cxt]] > 0:
+                all_correct += self.correct_cnt[label]['correct'][self.cxt_dic[cxt]]
+                all_samples += self.correct_cnt[label]['cnt'][self.cxt_dic[cxt]]
+        return {'num_correct': all_correct, 'num_all_samples': all_samples}
+
+    def cal_acc_in_some_contexts_of_a_label(self, label, context_list):
+        correct_info = self.count_correct_info_in_some_contexts_of_a_label(label, context_list)
+        return correct_info['num_correct'] / correct_info['num_all_samples']
+
 
 def compute_mean_std(cifar100_dataset):
     """compute the mean and std of cifar100 dataset
