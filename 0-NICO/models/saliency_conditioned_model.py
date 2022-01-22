@@ -121,6 +121,28 @@ class NoSaliencyConditionedSharedAblation(TwoInputSharedResNet):
             return refine_output
 
 
+class InverseConditionedSharedAblation(TwoInputSharedResNet):
+    def __init__(self, block, layers, condition_activation=None, stop_gradient=True, num_classes=1000):
+        super(InverseConditionedSharedAblation, self).__init__(block, layers, condition_activation,
+                                                                  stop_gradient, num_classes)
+
+    def forward(self, x, processed_x, train_mode=False):
+        coarse_feature = self.feature_extractor(x)
+        coarse_output = self.coarse_classifier(coarse_feature)
+        if self.stop_gradient:
+            input_condition = coarse_output.detach()
+        else:
+            input_condition = coarse_output
+        input_condition = self.activation_on_condition(input_condition)
+
+        refine_feature = self.feature_extractor(processed_x)
+        refine_output = self.refine_classifier(torch.cat([refine_feature, input_condition], dim=1))
+        if train_mode:
+            return refine_output, coarse_output
+        else:
+            return refine_output
+
+
 class OnlySaliencySharedAblation(TwoInputSharedResNet):
     def __init__(self, block, layers, condition_activation=None, stop_gradient=True, num_classes=1000):
         super(OnlySaliencySharedAblation, self).__init__(block, layers, condition_activation,
@@ -173,6 +195,13 @@ def nosaliency_conditioned_shared_resnet18(pretrained=False, **kwargs):
 
 def only_saliency_conditioned_shared_resnet18(pretrained=False, **kwargs):
     model = OnlySaliencySharedAblation(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        raise ValueError
+    return model
+
+
+def saliency_conditioned_inverse_shared_resnet18(pretrained=False, **kwargs):
+    model = InverseConditionedSharedAblation(BasicBlock, [2, 2, 2, 2], **kwargs)
     if pretrained:
         raise ValueError
     return model
