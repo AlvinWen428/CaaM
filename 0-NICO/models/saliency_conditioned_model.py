@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .resnet224 import ResNet, BasicBlock, ResNet_Feature
+from .resnet224 import ResNet, BasicBlock, ResNet_Feature, ResNetWithInterFeature
 from .crop_conditioned_model import ResNetFusionModel
 
 
@@ -91,6 +91,65 @@ class NoSaliencyConditionedAblation(TwoInputResNet):
         else:
             input_condition = coarse_output
         input_condition = self.activation_on_condition(input_condition)
+
+        output = self.refine_model(x, input_condition)
+        if train_mode:
+            return output, coarse_output
+        else:
+            return output
+
+
+class SaliencyConditionedDifferentZetaAblation(TwoInputResNet):
+    def __init__(self, block, layers, condition_activation=None, stop_gradient=True, num_classes=1000,
+                 select_feature='avgpool'):
+        super(SaliencyConditionedDifferentZetaAblation, self).__init__(block, layers, 5,
+                                                                       condition_activation, stop_gradient, num_classes)
+        self.select_feature = select_feature
+        del self.coarse_model
+        del self.refine_model
+
+        if self.select_feature == 'avgpool':
+            additional_channel = 512 * block.expansion
+            self.feature_idx = 4
+            self.extractor = self.extract_avgpool
+        elif self.select_feature == 'layer2':
+            additional_channel = 128
+            self.feature_idx = 1
+            self.extractor = self.extract_conv_layer
+        elif self.select_feature == 'layer3':
+            additional_channel = 256
+            self.feature_idx = 2
+            self.extractor = self.extract_conv_layer
+        elif self.select_feature == 'layer4':
+            additional_channel = 512
+            self.feature_idx = 3
+            self.extractor = self.extract_conv_layer
+        else:
+            raise ValueError
+
+        self.coarse_model = ResNetWithInterFeature(block, layers, num_classes)
+        self.refine_model = ResNetFusionModel(block, layers, 5, additional_channel, num_classes)
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+
+    def extract_avgpool(self, feature_tuple):
+        return feature_tuple[4]
+
+    def extract_conv_layer(self, feature_tuple):
+        layer_output = feature_tuple[self.feature_idx]
+        extract_feature = self.global_avg_pool(layer_output).view(layer_output.shape[0], layer_output.shape[1])
+        return extract_feature
+
+    def forward(self, x, processed_x, train_mode=False):
+        coarse_output, inter = self.coarse_model(processed_x)
+        extract_feature = self.extractor(inter)
+
+        if self.stop_gradient:
+            input_condition = extract_feature.detach()
+        else:
+            input_condition = extract_feature
+
+        # use no activation on the intermediate features
+        # input_condition = self.activation_on_condition(input_condition)
 
         output = self.refine_model(x, input_condition)
         if train_mode:
@@ -202,6 +261,13 @@ def only_saliency_conditioned_shared_resnet18(pretrained=False, **kwargs):
 
 def saliency_conditioned_inverse_shared_resnet18(pretrained=False, **kwargs):
     model = InverseConditionedSharedAblation(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        raise ValueError
+    return model
+
+
+def saliency_conditioned_different_zeta_resnet18(pretrained=False, **kwargs):
+    model = SaliencyConditionedDifferentZetaAblation(BasicBlock, [2, 2, 2, 2], **kwargs)
     if pretrained:
         raise ValueError
     return model
