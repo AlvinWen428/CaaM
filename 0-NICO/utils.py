@@ -327,6 +327,21 @@ def get_custom_network_saliency(args, variance_opt: dict):
     elif args.net == 'saliency_conditioned_mix_inputs_ensemble_resnet18':
         from models.saliency_conditioned_model import saliency_conditioned_mix_inputs_ensemble_resnet18
         net = saliency_conditioned_mix_inputs_ensemble_resnet18(num_classes=10)
+    elif args.net == 'saliency_conditioned_no_prime_loss_shared_resnet18':
+        condition_activation = variance_opt.get('condition_activation', None)
+        stop_gradient = variance_opt.get('stop_gradient', True)
+
+        from models.saliency_conditioned_model import saliency_conditioned_no_prime_loss_shared_resnet18
+        net = saliency_conditioned_no_prime_loss_shared_resnet18(num_classes=10,
+                                                                 condition_activation=condition_activation,
+                                                                 stop_gradient=stop_gradient)
+    elif args.net == 'saliency_conditioned_no_concat_shared_resnet18':
+        condition_activation = variance_opt.get('condition_activation', None)
+        stop_gradient = variance_opt.get('stop_gradient', True)
+
+        from models.saliency_conditioned_model import saliency_conditioned_no_concat_shared_resnet18
+        net = saliency_conditioned_no_concat_shared_resnet18(num_classes=10, condition_activation=condition_activation,
+                                                             stop_gradient=stop_gradient)
     else:
         raise ValueError
 

@@ -224,6 +224,51 @@ class OnlySaliencySharedAblation(TwoInputSharedResNet):
             return refine_output
 
 
+class NoPrimeLossSharedAblation(TwoInputSharedResNet):
+    def __init__(self, block, layers, condition_activation=None, stop_gradient=True, num_classes=1000):
+        super(NoPrimeLossSharedAblation, self).__init__(block, layers, condition_activation,
+                                                         stop_gradient, num_classes)
+
+    def forward(self, x, processed_x, train_mode=False):
+        coarse_feature = self.feature_extractor(processed_x)
+        coarse_output = self.coarse_classifier(coarse_feature)
+        if self.stop_gradient:
+            input_condition = coarse_output.detach()
+        else:
+            input_condition = coarse_output
+        input_condition = self.activation_on_condition(input_condition)
+
+        refine_feature = self.feature_extractor(x)
+        refine_output = self.refine_classifier(torch.cat([refine_feature, input_condition], dim=1))
+
+        # output a detached coarse output to avoid the coarse loss back-prop to the model
+        coarse_output_no_loss = coarse_output.detach()
+        if train_mode:
+            return refine_output, coarse_output_no_loss
+        else:
+            return refine_output
+
+
+class NoConcatSharedAblation(TwoInputSharedResNet):
+    def __init__(self, block, layers, condition_activation=None, stop_gradient=True, num_classes=1000):
+        super(NoConcatSharedAblation, self).__init__(block, layers, condition_activation,
+                                                     stop_gradient, num_classes)
+        del self.refine_classifier
+        self.refine_classifier = nn.Linear(512 * block.expansion, num_classes)
+
+    def forward(self, x, processed_x, train_mode=False):
+        coarse_feature = self.feature_extractor(processed_x)
+        coarse_output = self.coarse_classifier(coarse_feature)
+
+        refine_feature = self.feature_extractor(x)
+        refine_output = self.refine_classifier(refine_feature)
+
+        if train_mode:
+            return refine_output, coarse_output
+        else:
+            return refine_output
+
+
 class MixTwoInputSharedEnsemble(ResNet):
     def __init__(self, block, layers, num_classes=1000):
         super(MixTwoInputSharedEnsemble, self).__init__(block, layers, num_classes)
@@ -308,6 +353,20 @@ def saliency_conditioned_different_zeta_resnet18(pretrained=False, **kwargs):
 
 def saliency_conditioned_mix_inputs_ensemble_resnet18(pretrained=False, **kwargs):
     model = MixTwoInputSharedEnsemble(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        raise ValueError
+    return model
+
+
+def saliency_conditioned_no_prime_loss_shared_resnet18(pretrained=False, **kwargs):
+    model = NoPrimeLossSharedAblation(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        raise ValueError
+    return model
+
+
+def saliency_conditioned_no_concat_shared_resnet18(pretrained=False, **kwargs):
+    model = NoConcatSharedAblation(BasicBlock, [2, 2, 2, 2], **kwargs)
     if pretrained:
         raise ValueError
     return model
