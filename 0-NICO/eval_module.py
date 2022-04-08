@@ -178,9 +178,10 @@ def evaluate_zero_shot_generalization(config, acc_per_context, label2train):
 
 
 @torch.no_grad()
-def eval_mode(config, args, net, test_loader, loss_function, model_path):
+def eval_mode(config, args, net, test_loader, loss_function, model_path=None):
     start = time.time()
-    load_model(net, model_path)
+    if model_path is not None:
+        load_model(net, model_path)
     if isinstance(net, list):
         for net_ in net:
             net_.eval()
