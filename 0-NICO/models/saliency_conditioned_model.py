@@ -224,6 +224,39 @@ class OnlySaliencySharedAblation(TwoInputSharedResNet):
             return refine_output
 
 
+class MixTwoInputSharedEnsemble(ResNet):
+    def __init__(self, block, layers, num_classes=1000):
+        super(MixTwoInputSharedEnsemble, self).__init__(block, layers, num_classes)
+
+    def original_forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+
+        return x
+
+    def forward(self, x, processed_x=None, train_mode=False):
+        if train_mode and processed_x is None:
+            output = self.original_forward(x)
+        elif not train_mode and processed_x is not None:
+            output_raw = self.original_forward(x)
+            output_processed = self.original_forward(processed_x)
+            output = (output_raw + output_processed) / 2
+        else:
+            raise ValueError
+        return output
+
+
 def saliency_conditioned_resnet18(pretrained=False, fusion_layer=4, **kwargs):
     model = TwoInputResNet(BasicBlock, [2, 2, 2, 2], fusion_layer=fusion_layer, **kwargs)
     if pretrained:
@@ -272,3 +305,9 @@ def saliency_conditioned_different_zeta_resnet18(pretrained=False, **kwargs):
         raise ValueError
     return model
 
+
+def saliency_conditioned_mix_inputs_ensemble_resnet18(pretrained=False, **kwargs):
+    model = MixTwoInputSharedEnsemble(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        raise ValueError
+    return model

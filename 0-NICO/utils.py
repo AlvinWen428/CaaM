@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import _LRScheduler, MultiStepLR
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from torch import nn, optim, autograd
 from PIL import Image
 
@@ -324,6 +324,9 @@ def get_custom_network_saliency(args, variance_opt: dict):
         from models.saliency_conditioned_model import saliency_conditioned_different_zeta_resnet18
         net = saliency_conditioned_different_zeta_resnet18(num_classes=10, stop_gradient=stop_gradient,
                                                            select_feature=select_feature)
+    elif args.net == 'saliency_conditioned_mix_inputs_ensemble_resnet18':
+        from models.saliency_conditioned_model import saliency_conditioned_mix_inputs_ensemble_resnet18
+        net = saliency_conditioned_mix_inputs_ensemble_resnet18(num_classes=10)
     else:
         raise ValueError
 
@@ -662,6 +665,14 @@ class init_training_dataloader():
     def get_processed_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
         assert self.processed_image is not None
         training_dataset = NICO_processed_dataset(self.image, self.label, self.context, self.processed_image, transform=self.transform)
+        training_loader = DataLoader(training_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
+        return training_loader
+
+    def get_mix_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
+        assert self.processed_image is not None
+        raw_dataset = NICO_dataset(self.image, self.label, self.context, transform=self.transform)
+        processed_dataset = NICO_dataset(self.processed_image, self.label, self.context, transform=self.transform)
+        training_dataset = ConcatDataset([raw_dataset, processed_dataset])
         training_loader = DataLoader(training_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
         return training_loader
 

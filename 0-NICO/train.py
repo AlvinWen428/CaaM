@@ -87,6 +87,9 @@ def train(epoch):
         if 'crop_conditioned' in args.net:
             outputs = net(images, train_mode=True)
             main_outputs = outputs[0]
+        elif 'mix_inputs' in args.net:
+            outputs = net(images, train_mode=True)
+            main_outputs = outputs
         elif 'saliency_conditioned' in args.net:
             outputs = net(images, processed_images, train_mode=True)
             main_outputs = outputs[0]
@@ -234,6 +237,8 @@ if __name__ == '__main__':
     else:
         if variance_opt['mode'] not in ['chuan_saliency']:
             train_loader = train_loader_init.get_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
+        elif 'mix_inputs' in args.net:
+            train_loader = train_loader_init.get_mix_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
         else:
             train_loader = train_loader_init.get_processed_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
 
@@ -257,6 +262,8 @@ if __name__ == '__main__':
     )
 
     if variance_opt['mode'] not in ['chuan', 'chuan_saliency']:
+        train_loss_function = test_loss_function = nn.CrossEntropyLoss()
+    elif 'mix_inputs' in args.net:
         train_loss_function = test_loss_function = nn.CrossEntropyLoss()
     else:
         def two_ce_loss(output, target):
