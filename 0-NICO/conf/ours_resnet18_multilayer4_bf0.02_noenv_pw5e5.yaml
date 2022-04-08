@@ -45,5 +45,5 @@ variance_opt:
   penalty_weight: 5e5
   penalty_anneal_iters: 0
   #2 blocks, 4 layers
-  split_layer: 2
+  split_layer: 3
 resume: False
