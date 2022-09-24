@@ -1,1 +1,0 @@
-CUDA_VISIBLE_DEVICES=0,1 python train.py --cfg conf/baseline_resnet18_imagenet9.yaml  --gpu --multigpu --name baseline_resnet18_imagenet9
