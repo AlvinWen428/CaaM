@@ -45,7 +45,7 @@ def eval_training(config, args, net, test_loader, loss_function, writer, epoch=0
                 W_mean = torch.stack([net_.module.fc.weight for net_ in net[:config['variance_opt']['n_env']]], 0).mean(0)
             outputs = nn.functional.linear(feature, W_mean)
         else:
-            if 'saliency_conditioned' in args.net:
+            if 'prime' in args.net:
                 outputs = net(images, processed_images)
             else:
                 outputs = net(images)
@@ -122,7 +122,7 @@ def eval_best(config, args, net, test_loader, loss_function ,checkpoint_path, be
                 W_mean = torch.stack([net_.module.fc.weight for net_ in net[:config['variance_opt']['n_env']]], 0).mean(0)
             outputs = nn.functional.linear(feature, W_mean)
         else:
-            if 'saliency_conditioned' in args.net:
+            if 'prime' in args.net:
                 outputs = net(images, processed_images)
             else:
                 outputs = net(images)
@@ -178,7 +178,7 @@ def evaluate_zero_shot_generalization(config, acc_per_context, label2train):
 
 
 @torch.no_grad()
-def eval_mode(config, args, net, test_loader, loss_function, model_path=None):
+def eval_mode(config, args, net, test_loader, loss_function, model_path=None, contain_zeroshot=True):
     start = time.time()
     if model_path is not None:
         load_model(net, model_path)
@@ -197,16 +197,16 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path=None):
     for batch_data in test_loader:
         if len(batch_data) == 3:
             images, labels, context = batch_data[0], batch_data[1], batch_data[2]
-            processed_images = None
+            key_inputs = None
             if args.gpu:
                 images = images.cuda()
                 labels = labels.cuda()
         elif len(batch_data) == 4:
-            images, labels, context, processed_images = batch_data[0], batch_data[1], batch_data[2], batch_data[3]
+            images, labels, context, key_inputs = batch_data[0], batch_data[1], batch_data[2], batch_data[3]
             if args.gpu:
                 images = images.cuda()
                 labels = labels.cuda()
-                processed_images = processed_images.cuda()
+                key_inputs = key_inputs.cuda()
         else:
             raise ValueError
 
@@ -220,8 +220,8 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path=None):
                 W_mean = torch.stack([net_.module.fc.weight for net_ in net[:config['variance_opt']['n_env']]], 0).mean(0)
             outputs = nn.functional.linear(feature, W_mean)
         else:
-            if 'saliency_conditioned' in args.net:
-                outputs = net(images, processed_images)
+            if 'prime' in args.net:
+                outputs = net(images, key_inputs)
             else:
                 outputs = net(images)
         loss = loss_function(outputs, labels)
@@ -240,6 +240,7 @@ def eval_mode(config, args, net, test_loader, loss_function, model_path=None):
     ))
 
     evaluate_acc_per_context_per_class(config, acc_per_context, label2train)
-    evaluate_zero_shot_generalization(config, acc_per_context, label2train)
+    if contain_zeroshot:
+        evaluate_zero_shot_generalization(config, acc_per_context, label2train)
 
     return correct.float() / len(test_loader.dataset)

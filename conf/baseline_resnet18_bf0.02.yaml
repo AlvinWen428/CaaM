@@ -1,9 +1,6 @@
 exp_name: nico_resvit18_multi_unshuffle_bf0.02_lr0.01
 net: resnet18
 dataset: NICO
-#image_folder: /data2/wangtan/causal-invariant-attention/dataset/NICO/multi_classification
-#cxt_dic_path: /data2/wangtan/causal-invariant-attention/dataset/NICO/label_file/Context_name2label.json
-#class_dic_path: /data2/wangtan/causal-invariant-attention/dataset/NICO/label_file/Animal_name2label.json
 image_folder: /data/cwen/NICO/multi_classification
 cxt_dic_path: /data/cwen/NICO/Context_name2label.json
 class_dic_path: /data/cwen/NICO/Animal_name2label.json
@@ -14,7 +11,6 @@ training_opt:
   warm: 2
   epoch: 200
   milestones: [80, 120, 160]
-  # milestones: [80, 140, 200]
   save_epoch: 20
   print_batch: 1
   mean: [0.52418953, 0.5233741, 0.44896784]

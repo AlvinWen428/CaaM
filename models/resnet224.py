@@ -233,28 +233,6 @@ class ResNet_Classifier(nn.Module):
         return x
 
 
-class ResNetWithInterFeature(ResNet):
-    def __init__(self, block, layers, num_classes=1000):
-        super(ResNetWithInterFeature, self).__init__(block, layers, num_classes)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        layer1_out = self.layer1(x)
-        layer2_out = self.layer2(layer1_out)
-        layer3_out = self.layer3(layer2_out)
-        layer4_out = self.layer4(layer3_out)
-
-        avgpool_out = self.avgpool(layer4_out)
-        avgpool_out = avgpool_out.view(avgpool_out.size(0), -1)
-        out = self.fc(avgpool_out)
-
-        return out, (layer1_out, layer2_out, layer3_out, layer4_out, avgpool_out)
-
-
 class TwoVanillaResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000):
         super(TwoVanillaResNet, self).__init__()

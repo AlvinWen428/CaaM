@@ -23,11 +23,11 @@ from torch.utils.tensorboard import SummaryWriter
 from conf import settings
 from utils import get_network, get_test_dataloader, get_val_dataloader, WarmUpLR, most_recent_folder, most_recent_weights, last_epoch, best_acc_weights, \
     update, get_mean_std, Acc_Per_Context, Acc_Per_Context_Class, penalty, cal_acc, get_custom_network, get_custom_network_vit, \
-    save_model, load_model, get_parameter_number, init_training_dataloader, get_custom_network_crop_conditioned, \
-    get_custom_network_saliency
-from train_module import train_env_ours, auto_split, refine_split, update_pre_optimizer, update_pre_optimizer_vit, update_bias_optimizer, auto_cluster
+    save_model, load_model, get_parameter_number, init_training_dataloader, get_custom_network_primenet
+from train_module import train_env_caam, auto_split, refine_split, update_pre_optimizer, update_pre_optimizer_vit, update_bias_optimizer, auto_cluster
 from eval_module import eval_training, eval_best, eval_mode
 from timm.scheduler import create_scheduler
+
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
@@ -61,9 +61,9 @@ def train(epoch):
     for batch_index, batch_data in enumerate(train_loader):
         if len(batch_data) == 2:
             images, labels = batch_data[0], batch_data[1]
-            processed_images = None
+            key_inputs = None
         elif len(batch_data) == 3:
-            images, labels, processed_images = batch_data[0], batch_data[1], batch_data[2]
+            images, labels, key_inputs = batch_data[0], batch_data[1], batch_data[2]
         else:
             raise ValueError
 
@@ -76,8 +76,8 @@ def train(epoch):
         if args.gpu:
             labels = labels.cuda()
             images = images.cuda()
-            if processed_images is not None:
-                processed_images = processed_images.cuda()
+            if key_inputs is not None:
+                key_inputs = key_inputs.cuda()
 
         if 'mixup' in training_opt and training_opt['mixup'] == True:
             inputs, targets_a, targets_b, lam = mixup_data(images, labels, use_cuda=True)
@@ -87,11 +87,8 @@ def train(epoch):
         if 'crop_conditioned' in args.net:
             outputs = net(images, train_mode=True)
             main_outputs = outputs[0]
-        elif 'mix_inputs' in args.net:
-            outputs = net(images, train_mode=True)
-            main_outputs = outputs
-        elif 'saliency_conditioned' in args.net:
-            outputs = net(images, processed_images, train_mode=True)
+        elif 'prime' in args.net:
+            outputs = net(images, key_inputs, train_mode=True)
             main_outputs = outputs[0]
         else:
             outputs = net(images)
@@ -125,7 +122,6 @@ def train(epoch):
 
     print('epoch {} training time consumed: {:.2f}s \t Train Acc: {:.4f}'.format(epoch, finish - start, train_acc_all))
     return train_acc_all
-
 
 
 if __name__ == '__main__':
@@ -167,15 +163,13 @@ if __name__ == '__main__':
 
     # ============================================================================
     # MODEL
-    if variance_opt['mode'] in ['ours']:
+    if variance_opt['mode'] in ['caam']:
         if config['net'] == 'vit':
             net = get_custom_network_vit(args, variance_opt)
         else:
             net = get_custom_network(args, variance_opt)
-    elif variance_opt['mode'] in ['chuan']:
-        net = get_custom_network_crop_conditioned(args, variance_opt)
-    elif variance_opt['mode'] in ['chuan_saliency']:
-        net = get_custom_network_saliency(args, variance_opt)
+    elif variance_opt['mode'] in ['primenet']:
+        net = get_custom_network_primenet(args, variance_opt)
     else:
         net = get_network(args)
     if 'env_type' in variance_opt and variance_opt['env_type'] in ['auto-baseline', 'auto-iter'] and variance_opt['from_scratch']:
@@ -189,8 +183,6 @@ if __name__ == '__main__':
         ref_net.eval()
         print('Done.')
     get_parameter_number(net)
-
-
 
     # ============================================================================
     # DATA PREPROCESSING
@@ -235,22 +227,20 @@ if __name__ == '__main__':
     if 'env' in variance_opt:
         train_loader = train_loader_init.get_env_dataloader(config, training_opt['batch_size'], num_workers=4, shuffle=True, pre_split=pre_split)
     else:
-        if variance_opt['mode'] not in ['chuan_saliency']:
+        if variance_opt['mode'] != 'primenet':
             train_loader = train_loader_init.get_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
-        elif 'mix_inputs' in args.net:
-            train_loader = train_loader_init.get_mix_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
         else:
-            train_loader = train_loader_init.get_processed_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
+            train_loader = train_loader_init.get_prime_dataloader(training_opt['batch_size'], num_workers=4, shuffle=True)
 
-    val_loader = get_val_dataloader(
+    val_loader, val_iid_loader = get_val_dataloader(
         config,
         mean,
         std,
+        balance_factor=variance_opt['balance_factor'],
         num_workers=4,
         batch_size=training_opt['batch_size'],
         shuffle=False
     )
-
 
     test_loader = get_test_dataloader(
         config,
@@ -261,9 +251,7 @@ if __name__ == '__main__':
         shuffle=False
     )
 
-    if variance_opt['mode'] not in ['chuan', 'chuan_saliency']:
-        train_loss_function = test_loss_function = nn.CrossEntropyLoss()
-    elif 'mix_inputs' in args.net:
+    if variance_opt['mode'] != 'primenet':
         train_loss_function = test_loss_function = nn.CrossEntropyLoss()
     else:
         def two_ce_loss(output, target):
@@ -275,12 +263,12 @@ if __name__ == '__main__':
 
     if args.eval is not None:
         val_acc = eval_mode(config, args, net, val_loader, test_loss_function, args.eval)
+        val_iid_acc = eval_mode(config, args, net, val_iid_loader, test_loss_function, args.eval, contain_zeroshot=False)
         test_acc = eval_mode(config, args, net, test_loader, test_loss_function, args.eval)
-        print('Val Score: %s  Test Score: %s' %(val_acc.item(), test_acc.item()))
+        print('In-Domain Val Score: %s  Val Score: %s  Test Score: %s' %(val_iid_acc.item(), val_acc.item(), test_acc.item()))
         exit()
 
-
-    if variance_opt['mode'] in ['ours']:
+    if variance_opt['mode'] in ['caam']:
         assert isinstance(net, list)
         if variance_opt['sp_flag']:
             optimizer = []
@@ -325,7 +313,6 @@ if __name__ == '__main__':
             iter_per_epoch = len(train_loader[0]) if isinstance(train_loader, list) else len(train_loader)
             warmup_scheduler = WarmUpLR(optimizer, iter_per_epoch * training_opt['warm'])
 
-
     if config['resume']:
         recent_folder = most_recent_folder(os.path.join(settings.CHECKPOINT_PATH, args.net), fmt=settings.DATE_FORMAT)
         if not recent_folder:
@@ -342,7 +329,6 @@ if __name__ == '__main__':
     if not os.path.exists(settings.LOG_DIR):
         os.mkdir(settings.LOG_DIR)
     writer = SummaryWriter(log_dir=os.path.join(settings.LOG_DIR, args.net, exp_name))
-
 
     #create checkpoint folder to save model
     if not os.path.exists(checkpoint_path):
@@ -374,7 +360,6 @@ if __name__ == '__main__':
         net.load_state_dict(torch.load(weights_path))
 
         resume_epoch = last_epoch(os.path.join(settings.CHECKPOINT_PATH, args.net, recent_folder))
-
 
     for epoch in range(1, training_opt['epoch']):
         if 't2tvit' in args.net and training_opt['optim']['sched']=='cosine':
@@ -411,16 +396,14 @@ if __name__ == '__main__':
             bias_optimizer, bias_schedule = update_bias_optimizer(bias_classifier.parameters())
             print('Update Dataloader Done')
 
-
         elif variance_opt['env_type'] == 'auto-iter-cluster' and epoch>=variance_opt['split_renew'] and (epoch-variance_opt['split_renew'])%variance_opt['split_renew_iters']==0:
             updated_split = auto_cluster(pre_train_loader, net[-1], training_opt, variance_opt)
             # updata dataloader
             train_loader = train_loader_init.get_env_dataloader(config, training_opt['batch_size'], num_workers=4, shuffle=True, pre_split=updated_split)
             print('Update Dataloader Done')
 
-
         if 'env' in variance_opt:
-            train_acc = train_env_ours(epoch, net, train_loader, args, training_opt, variance_opt, train_loss_function, optimizer, warmup_scheduler)
+            train_acc = train_env_caam(epoch, net, train_loader, args, training_opt, variance_opt, train_loss_function, optimizer, warmup_scheduler)
 
         else:
             train_acc = train(epoch)
@@ -433,7 +416,6 @@ if __name__ == '__main__':
             best_acc = acc
             best_epoch = epoch
             best_train_acc  = train_acc
-
 
         if not epoch % training_opt['save_epoch']:
             # torch.save(net.state_dict(), checkpoint_path.format(net=args.net, epoch=epoch, type='regular'))

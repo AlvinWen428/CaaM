@@ -91,8 +91,8 @@ def get_network(args):
     elif args.net == 'resnet34cbam2':
         from models.resnet_cbam2 import ResidualNet
         net = ResidualNet("ImageNet", 34, num_classes=10, att_type='CBAM')
-    elif args.net == 'resnet18_ours_cbam':
-        from models.resnet_ours_cbam import ResidualNet
+    elif args.net == 'resnet18_caam_cbam':
+        from models.resnet_caam_cbam import ResidualNet
         net = ResidualNet("ImageNet", 18, num_classes=10, att_type='CBAM')
     elif args.net == 'resvit18':
         from models.resvit import resvit18
@@ -187,17 +187,17 @@ def get_custom_network(args, variance_opt):
         from models.resnet224 import resnet18_feature, classifier
     elif args.net == 'resnet18cbam2':
         from models.resnet_cbam2 import resnet18_feature, classifier
-    elif args.net == 'resnet18_ours_cbam':
-        from models.resnet_ours_cbam import ResidualNet, classifier
-    elif args.net == 'resnet18_ours_cbam_multi':
-        from models.resnet_ours_cbam_multi import ResidualNet, classifier
+    elif args.net == 'resnet18_caam_cbam':
+        from models.resnet_caam_cbam import ResidualNet, classifier
+    elif args.net == 'resnet18_caam_cbam_multi':
+        from models.resnet_caam_cbam_multi import ResidualNet, classifier
     elif args.net == 't2tvit7':
         from models.t2tvit import T2t_vit_7_feature, classifier
-    elif args.net == 't2tvit7_ours':
-        from models.t2tvit_ours import T2t_vit_7_feature, classifier
+    elif args.net == 't2tvit7_caam':
+        from models.t2tvit_caam import T2t_vit_7_feature, classifier
 
 
-    if variance_opt['mode'] in ['ours']:
+    if variance_opt['mode'] in ['caam']:
         num_env = variance_opt['n_env']
         model_list = []
         for e in range(num_env + 1):
@@ -206,7 +206,7 @@ def get_custom_network(args, variance_opt):
             else:
                 if variance_opt['erm_flag']:
                     model_list.append(classifier(num_classes=10))
-                if args.net == 't2tvit7_ours':
+                if args.net == 't2tvit7_caam':
                     model_list.append(T2t_vit_7_feature(num_classes=10, final_k=variance_opt['final_k']))
                 else:
                     try:
@@ -226,7 +226,7 @@ def get_custom_network_vit(args, variance_opt):
     if args.net == 'resvit18':
         from models.resvit import resvit18_feature, classifier
 
-    if variance_opt['mode'] in ['ours']:
+    if variance_opt['mode'] in ['caam']:
         num_env = variance_opt['n_env']
         model_list = []
         for e in range(num_env + 1):
@@ -243,105 +243,12 @@ def get_custom_network_vit(args, variance_opt):
     return model_list
 
 
-def get_custom_network_crop_conditioned(args, variance_opt: dict):
-    if args.net == 'crop_conditioned_resnet18':
-        fusion_layer = variance_opt.get('fusion_layer', 4)
+def get_custom_network_primenet(args, variance_opt: dict):
+    if args.net == 'primenet_resnet18':
         condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-        crop_size = variance_opt.get('crop_size', 150)
 
-        from models.crop_conditioned_model import crop_conditioned_resnet18
-        net = crop_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer,
-                                        condition_activation=condition_activation, stop_gradient=stop_gradient,
-                                        crop_size=crop_size)
-    elif args.net == 'uncrop_conditioned_resnet18':
-        fusion_layer = variance_opt.get('fusion_layer', 4)
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-        crop_size = variance_opt.get('crop_size', 150)
-
-        from models.crop_conditioned_model import uncrop_conditioned_resnet18
-        net = uncrop_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer,
-                                          condition_activation=condition_activation, stop_gradient=stop_gradient,
-                                          crop_size=crop_size)
-    else:
-        raise ValueError
-
-    if args.gpu:
-        net = net.cuda()
-    return net
-
-
-def get_custom_network_saliency(args, variance_opt: dict):
-    if args.net == 'saliency_conditioned_resnet18':
-        fusion_layer = variance_opt.get('fusion_layer', 4)
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import saliency_conditioned_resnet18
-        net = saliency_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer,
-                                            condition_activation=condition_activation, stop_gradient=stop_gradient)
-    elif args.net == 'saliency_conditioned_shared_resnet18':
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import saliency_conditioned_shared_resnet18
-        net = saliency_conditioned_shared_resnet18(num_classes=10, condition_activation=condition_activation,
-                                                   stop_gradient=stop_gradient)
-    elif args.net == 'nosaliency_conditioned_resnet18':
-        fusion_layer = variance_opt.get('fusion_layer', 4)
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import nosaliency_conditioned_resnet18
-        net = nosaliency_conditioned_resnet18(num_classes=10, fusion_layer=fusion_layer,
-                                              condition_activation=condition_activation, stop_gradient=stop_gradient)
-    elif args.net == 'nosaliency_conditioned_shared_resnet18':
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import nosaliency_conditioned_shared_resnet18
-        net = nosaliency_conditioned_shared_resnet18(num_classes=10, condition_activation=condition_activation,
-                                                     stop_gradient=stop_gradient)
-    elif args.net == 'only_saliency_conditioned_shared_resnet18':
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import only_saliency_conditioned_shared_resnet18
-        net = only_saliency_conditioned_shared_resnet18(num_classes=10, condition_activation=condition_activation,
-                                                        stop_gradient=stop_gradient)
-    elif args.net == 'saliency_conditioned_inverse_shared_resnet18':
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import saliency_conditioned_inverse_shared_resnet18
-        net = saliency_conditioned_inverse_shared_resnet18(num_classes=10, condition_activation=condition_activation,
-                                                           stop_gradient=stop_gradient)
-    elif args.net == 'saliency_conditioned_different_zeta_resnet18':
-        stop_gradient = variance_opt.get('stop_gradient', True)
-        select_feature = variance_opt.get('select_feature', 'avgpool')
-
-        from models.saliency_conditioned_model import saliency_conditioned_different_zeta_resnet18
-        net = saliency_conditioned_different_zeta_resnet18(num_classes=10, stop_gradient=stop_gradient,
-                                                           select_feature=select_feature)
-    elif args.net == 'saliency_conditioned_mix_inputs_ensemble_resnet18':
-        from models.saliency_conditioned_model import saliency_conditioned_mix_inputs_ensemble_resnet18
-        net = saliency_conditioned_mix_inputs_ensemble_resnet18(num_classes=10)
-    elif args.net == 'saliency_conditioned_no_prime_loss_shared_resnet18':
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import saliency_conditioned_no_prime_loss_shared_resnet18
-        net = saliency_conditioned_no_prime_loss_shared_resnet18(num_classes=10,
-                                                                 condition_activation=condition_activation,
-                                                                 stop_gradient=stop_gradient)
-    elif args.net == 'saliency_conditioned_no_concat_shared_resnet18':
-        condition_activation = variance_opt.get('condition_activation', None)
-        stop_gradient = variance_opt.get('stop_gradient', True)
-
-        from models.saliency_conditioned_model import saliency_conditioned_no_concat_shared_resnet18
-        net = saliency_conditioned_no_concat_shared_resnet18(num_classes=10, condition_activation=condition_activation,
-                                                             stop_gradient=stop_gradient)
+        from models.resnet_primenet import primenet_resnet18
+        net = primenet_resnet18(num_classes=10, condition_activation=condition_activation)
     else:
         raise ValueError
 
@@ -380,7 +287,7 @@ def get_mean_std(image_folder):
     return list(mean.numpy()), list(std.numpy())
 
 
-def reformulate_data_dist(datas, labels, contexts, processed_datas, balance_factor, dataset_type, config):
+def reformulate_data_dist(datas, labels, contexts, key_input_datas, balance_factor, dataset_type, config):
     data_dist = config['variance_opt']['{}_dist'.format(dataset_type)]
     cxt_dic = json.load(open(config['cxt_dic_path'], 'r'))
     class_dic = json.load(open(config['class_dic_path'], 'r'))
@@ -388,7 +295,7 @@ def reformulate_data_dist(datas, labels, contexts, processed_datas, balance_fact
     new_data = []
     new_label = []
     new_context = []
-    new_processed_datas = []
+    new_keyinput_datas = []
 
     for img_class in data_dist.keys():
         cls_num = len(data_dist[img_class])
@@ -396,8 +303,8 @@ def reformulate_data_dist(datas, labels, contexts, processed_datas, balance_fact
         img_class_labels = [labels[idx] for idx in class_idx]
         img_class_datas = [datas[idx] for idx in class_idx]
         img_class_contexts = [contexts[idx] for idx in class_idx]
-        if len(processed_datas) != 0:
-            img_class_processed_datas = [processed_datas[idx] for idx in class_idx]
+        if len(key_input_datas) != 0:
+            img_class_keyinput_datas = [key_input_datas[idx] for idx in class_idx]
 
         for index, img_context in enumerate(data_dist[img_class]):
             img_context_label = cxt_dic[img_context]
@@ -413,10 +320,10 @@ def reformulate_data_dist(datas, labels, contexts, processed_datas, balance_fact
             new_data.extend([img_class_datas[i] for i in selec_idx])
             new_label.extend([img_class_labels[i] for i in selec_idx])
             new_context.extend([img_class_contexts[i] for i in selec_idx])
-            if len(processed_datas) != 0:
-                new_processed_datas.extend(img_class_processed_datas[i] for i in selec_idx)
+            if len(key_input_datas) != 0:
+                new_keyinput_datas.extend(img_class_keyinput_datas[i] for i in selec_idx)
 
-    return new_data, new_label, new_context, new_processed_datas
+    return new_data, new_label, new_context, new_keyinput_datas
 
 
 def make_env(image, label, context, n_env, env_type, pre_split=None):
@@ -467,10 +374,10 @@ def make_env(image, label, context, n_env, env_type, pre_split=None):
     return image_env, label_env, context_env
 
 
-def load_NICO(dataroot, process_data_root, balance_factor=1, dataset_type='training', config=None):
+def load_NICO(dataroot, key_input_root, balance_factor=1, dataset_type='training', config=None):
     all_file_name = os.listdir(dataroot)
     all_data = []
-    all_processed_data = []
+    all_keyinput_data = []
     all_label = []
     all_context = []
 
@@ -479,17 +386,17 @@ def load_NICO(dataroot, process_data_root, balance_factor=1, dataset_type='train
         all_label.append(label)
         all_context.append(context)
         all_data.append(Image.open(os.path.join(dataroot, file_name)).convert('RGB'))
-        if process_data_root is not None:
-            processed_file_name = file_name.split('.')[0] + '.png'
-            all_processed_data.append(Image.open(os.path.join(process_data_root, processed_file_name)).convert('RGB'))
+        if key_input_root is not None:
+            keyinput_file_name = file_name.split('.')[0] + '.png'
+            all_keyinput_data.append(Image.open(os.path.join(key_input_root, keyinput_file_name)).convert('RGB'))
 
     label_set = list(set(all_label))
     label2train = {label_set[i]: i for i in range(len(label_set))}
 
     if (balance_factor != 1) or ('{}_dist'.format(dataset_type) in config['variance_opt']):
-        all_data, all_label, all_context, all_processed_data = reformulate_data_dist(all_data,all_label,all_context,all_processed_data,balance_factor,dataset_type,config)
+        all_data, all_label, all_context, all_keyinput_data = reformulate_data_dist(all_data,all_label,all_context,all_keyinput_data,balance_factor,dataset_type,config)
 
-    return all_data, all_label, all_context, all_processed_data
+    return all_data, all_label, all_context, all_keyinput_data
 
 
 def show(imgs):
@@ -564,14 +471,14 @@ class NICO_dataset(torch.utils.data.Dataset):
         return len(self.all_data)
 
 
-class NICO_processed_dataset(torch.utils.data.Dataset):
-    def __init__(self, all_data, all_label, all_context, all_processed_data, transform=None, require_context=False,
+class NICO_KeyInput_dataset(torch.utils.data.Dataset):
+    def __init__(self, all_data, all_label, all_context, all_keyinput_data, transform=None, require_context=False,
                  soft_split=None, label2train=None):
-        super(NICO_processed_dataset, self).__init__()
+        super(NICO_KeyInput_dataset, self).__init__()
         self.all_data = all_data
         self.all_label = all_label
         self.all_context = all_context
-        self.all_processed_data = all_processed_data
+        self.all_keyinput_data = all_keyinput_data
         self.transform = transform
         self.require_context = require_context
 
@@ -589,21 +496,21 @@ class NICO_processed_dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, item):
         raw_img = self.all_data[item]
-        raw_processed_img = self.all_processed_data[item]
+        raw_keyinput_img = self.all_keyinput_data[item]
         img = self.transform(raw_img)
-        processed_img = self.transform(raw_processed_img)
-        # show([raw_img, img, raw_processed_img, processed_img])
+        keyinput_img = self.transform(raw_keyinput_img)
+        # show([raw_img, img, raw_keyinput_img, keyinput_img])
 
         label = self.label2train[self.all_label[item]]
         context = self.all_context[item]
 
         if self.require_context:
-            return img, label, context, processed_img
+            return img, label, context, keyinput_img
 
         if self.soft_split is not None:
-            return img, label, item, processed_img
+            return img, label, item, keyinput_img
 
-        return img, label, processed_img
+        return img, label, keyinput_img
 
     def __len__(self):
         return len(self.all_data)
@@ -663,13 +570,13 @@ class init_training_dataloader():
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std)
             ])
-            if 'processed_image_folder' not in config:
+            if 'key_input_folder' not in config:
                 self.image, self.label, self.context, _ = load_NICO(os.path.join(config['image_folder'], 'train'),
                                                                     None, balance_factor, 'training', config)
-                self.processed_image = None
+                self.keyinput_image = None
             else:
-                self.image, self.label, self.context, self.processed_image = load_NICO(os.path.join(config['image_folder'], 'train'),
-                                                                                       os.path.join(config['processed_image_folder'], 'train'),
+                self.image, self.label, self.context, self.keyinput_image = load_NICO(os.path.join(config['image_folder'], 'train'),
+                                                                                       os.path.join(config['key_input_folder'], 'train'),
                                                                                        balance_factor, 'training', config)
 
     def get_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
@@ -677,17 +584,9 @@ class init_training_dataloader():
         training_loader = DataLoader(training_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
         return training_loader
 
-    def get_processed_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
-        assert self.processed_image is not None
-        training_dataset = NICO_processed_dataset(self.image, self.label, self.context, self.processed_image, transform=self.transform)
-        training_loader = DataLoader(training_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
-        return training_loader
-
-    def get_mix_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
-        assert self.processed_image is not None
-        raw_dataset = NICO_dataset(self.image, self.label, self.context, transform=self.transform)
-        processed_dataset = NICO_dataset(self.processed_image, self.label, self.context, transform=self.transform)
-        training_dataset = ConcatDataset([raw_dataset, processed_dataset])
+    def get_prime_dataloader(self, batch_size=16, num_workers=1, shuffle=True):
+        assert self.keyinput_image is not None
+        training_dataset = NICO_KeyInput_dataset(self.image, self.label, self.context, self.keyinput_image, transform=self.transform)
         training_loader = DataLoader(training_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
         return training_loader
 
@@ -721,7 +620,7 @@ class init_training_dataloader():
         training_loader = []
         training_loader.append(DataLoader(CycleConcatDataset(*training_dataset), shuffle=shuffle, num_workers=num_workers, batch_size=batch_size))
 
-        if config['variance_opt']['mode'] == 'ours':
+        if config['variance_opt']['mode'] == 'caam':
             if config['variance_opt']['erm_flag']:
                 training_dataset_erm = training_dataset_all
                 training_loader.append(DataLoader(training_dataset_erm, shuffle=shuffle, num_workers=num_workers, batch_size=n_env * batch_size))
@@ -755,15 +654,15 @@ def get_test_dataloader(config, mean, std, batch_size=16, num_workers=2, shuffle
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])
-        if 'processed_image_folder' not in config:
+        if 'key_input_folder' not in config:
             image, label, context, _ = load_NICO(os.path.join(config['image_folder'], 'test'), None, balance_factor=1,
                                                  dataset_type='test', config=config)
             testing_dataset = NICO_dataset(image, label, context, transform_test, require_context=True)
         else:
-            image, label, context, processed_image = load_NICO(os.path.join(config['image_folder'], 'test'),
-                                                               os.path.join(config['processed_image_folder'], 'test'),
+            image, label, context, keyinput_image = load_NICO(os.path.join(config['image_folder'], 'test'),
+                                                               os.path.join(config['key_input_folder'], 'test'),
                                                                balance_factor=1, dataset_type='test', config=config)
-            testing_dataset = NICO_processed_dataset(image, label, context, processed_image,
+            testing_dataset = NICO_KeyInput_dataset(image, label, context, keyinput_image,
                                                      transform_test, require_context=True)
 
     testing_loader = DataLoader(
@@ -772,7 +671,7 @@ def get_test_dataloader(config, mean, std, batch_size=16, num_workers=2, shuffle
     return testing_loader
 
 
-def get_val_dataloader(config, mean, std, batch_size=16, num_workers=2, shuffle=False):
+def get_val_dataloader(config, mean, std, balance_factor=1, batch_size=16, num_workers=2, shuffle=False):
     """ return training dataloader
     Args:
         mean: mean of cifar100 test dataset
@@ -798,19 +697,29 @@ def get_val_dataloader(config, mean, std, batch_size=16, num_workers=2, shuffle=
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])
-        if 'processed_image_folder' not in config:
+        if 'key_input_folder' not in config:
             image, label, context, _ = load_NICO(os.path.join(config['image_folder'], 'val'), None, balance_factor=1,
                                                  dataset_type='val', config=config)
             val_dataset = NICO_dataset(image, label, context, transform_test, require_context=True)
+            image_iid, label_iid, context_iid, _ = load_NICO(os.path.join(config['image_folder'], 'val'), None,
+                                                             balance_factor=balance_factor,
+                                                             dataset_type='training', config=config)
+            val_iid_dataset = NICO_dataset(image_iid, label_iid, context_iid, transform_test, require_context=True)
         else:
-            image, label, context, processed_image = load_NICO(os.path.join(config['image_folder'], 'val'),
-                                                               os.path.join(config['processed_image_folder'], 'val'),
+            image, label, context, keyinput_image = load_NICO(os.path.join(config['image_folder'], 'val'),
+                                                               os.path.join(config['key_input_folder'], 'val'),
                                                                balance_factor=1, dataset_type='val', config=config)
-            val_dataset = NICO_processed_dataset(image, label, context, processed_image,
+            val_dataset = NICO_KeyInput_dataset(image, label, context, keyinput_image,
                                                  transform_test, require_context=True)
+            image_iid, label_iid, context_iid, keyinput_image_iid = \
+                load_NICO(os.path.join(config['image_folder'], 'val'), os.path.join(config['key_input_folder'], 'val'),
+                          balance_factor=balance_factor, dataset_type='training', config=config)
+            val_iid_dataset = NICO_KeyInput_dataset(image_iid, label_iid, context_iid, keyinput_image_iid,
+                                                transform_test, require_context=True)
 
     val_loader = DataLoader(val_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
-    return val_loader
+    val_iid_loader = DataLoader(val_iid_dataset, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
+    return val_loader, val_iid_loader
 
 
 def cal_acc(outputs, labels):

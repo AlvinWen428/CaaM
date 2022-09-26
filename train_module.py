@@ -32,7 +32,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 
-def train_env_ours(epoch, net, train_loader, args, training_opt, variance_opt, loss_function, optimizer, warmup_scheduler):
+def train_env_caam(epoch, net, train_loader, args, training_opt, variance_opt, loss_function, optimizer, warmup_scheduler):
     start = time.time()
     env_num = variance_opt['n_env']
     assert isinstance(net, list)

@@ -1,1 +1,0 @@
-CUDA_VISIBLE_DEVICES=0,1 python train.py -cfg conf/ours_t2tvit7_bf0.02_s4_noenv_pw5e4.yaml -gpu -name multi_ours_t2tvit7_stage4_noenv_pw5e4
